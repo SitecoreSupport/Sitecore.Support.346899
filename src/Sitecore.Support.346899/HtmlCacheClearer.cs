@@ -154,7 +154,34 @@ namespace Sitecore.Support.XA.Foundation.Multisite.EventHandlers
 
             usages = usages.Where(s => s != null).GroupBy(g => new { g.Name }).Select(x => x.First()).ToList();
             usages.AddRange(GetAllSitesForSharedSites(usages));
+            usages.AddRange(GetAllSitesUnderGrouping(usages));
             return usages;
+        }
+
+        protected virtual IEnumerable<SiteInfo> GetAllSitesUnderGrouping(IEnumerable<SiteInfo> usages)
+        {
+            List<SiteInfo> additionaSites = new List<SiteInfo>();
+
+            var sInfo = usages.FirstOrDefault(info => !info.Database.IsNullOrEmpty() && info.Database != "core");
+            if (sInfo == null)
+            {
+                return new SiteInfo[0];
+            }
+            var database = DatabaseRepository.GetDatabase(sInfo.Database);
+            foreach (var siteInfo in usages)
+            {
+                var siteRoot = database.GetItem(SiteInfoResolver.GetRootPath(siteInfo));
+
+                var siteInfos = SiteInfoResolver.Sites
+                        .Where(info => info.RootPath.Contains(siteRoot.Paths.Path))
+                        .Where(info => usages.All(x => x.Name != info.Name))
+                        .Where(info => additionaSites.All(x => x.Name != info.Name))
+                        .ToList();
+
+                additionaSites.AddRange(siteInfos);
+            }
+
+            return additionaSites;
         }
 
         protected virtual IEnumerable<SiteInfo> GetAllSitesForSharedSites(IEnumerable<SiteInfo> usages)
