@@ -17,10 +17,10 @@ using Sitecore.Links;
 using Sitecore.Publishing;
 using Sitecore.Sites;
 using Sitecore.Web;
+using Sitecore.XA.Foundation.Multisite;
 using Sitecore.XA.Foundation.Multisite.Extensions;
 
-
-namespace Sitecore.XA.Foundation.Multisite.EventHandlers
+namespace Sitecore.Support.XA.Foundation.Multisite.EventHandlers
 {
     public class HtmlCacheClearer : Publishing.HtmlCacheClearer
     {
@@ -151,7 +151,37 @@ namespace Sitecore.XA.Foundation.Multisite.EventHandlers
 
             usages = usages.Where(s => s != null).GroupBy(g => new { g.Name }).Select(x => x.First()).ToList();
             usages.AddRange(GetAllSitesForSharedSites(usages));
+            usages.AddRange(GetAllSitesUnderGrouping(usages));
             return usages;
+        }
+
+        protected virtual IEnumerable<SiteInfo> GetAllSitesUnderGrouping(IEnumerable<SiteInfo> usages)
+        {
+            List<SiteInfo> additionaSites = new List<SiteInfo>();
+            SiteInfo sInfo = usages.FirstOrDefault(delegate (SiteInfo info)
+            {
+                if (!info.Database.IsNullOrEmpty())
+                {
+                    return info.Database != "core";
+                }
+                return false;
+            });
+            if (sInfo == null)
+            {
+                return new SiteInfo[0];
+            }
+            Database database = Database.GetDatabase(sInfo.Database);
+            foreach (SiteInfo siteInfo in usages)
+            {
+                Item siteRoot = database.GetItem(SiteInfoResolver.GetRootPath(siteInfo));
+                List<SiteInfo> siteInfos = (from info in SiteInfoResolver.Sites
+                    where info.RootPath.Contains(siteRoot.Paths.Path)
+                    where usages.All((SiteInfo x) => x.Name != info.Name)
+                    where additionaSites.All((SiteInfo x) => x.Name != info.Name)
+                    select info).ToList();
+                additionaSites.AddRange(siteInfos);
+            }
+            return additionaSites;
         }
 
         protected virtual IEnumerable<SiteInfo> GetAllSitesForSharedSites(IEnumerable<SiteInfo> usages)
